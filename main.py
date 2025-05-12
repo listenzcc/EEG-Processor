@@ -19,7 +19,10 @@ Functions:
 # %% ---- 2025-05-08 ------------------------
 # Requirements and constants
 import time
+
 from data_collector.neuroscan import Client
+from data_collector.eye_movement import TCPServer
+from data_collector.joint import align_joint_eeg_em_data
 
 
 # %% ---- 2025-05-08 ------------------------
@@ -32,28 +35,44 @@ class StopWatch:
     # The total length of the experiment.
     total: float = 10
 
-
-client_kwargs = dict(
+# Connection to Neuroscan EEG device.
+eeg_kwargs = dict(
     host='192.168.31.79',
     port=4000
+)
+
+# Connection from the eyemovement device.
+em_kwargs = dict(
+    host='localhost',
+    port=8080
 )
 
 # %% ---- 2025-05-08 ------------------------
 # Play ground
 if __name__ == '__main__':
-    client = Client(**client_kwargs)
-    client.start_receiving_thread()
+    eeg = Client(**eeg_kwargs)
+    eeg.start_receiving_thread()
+    
+    em = TCPServer(**em_kwargs)
+    em.start_service()
 
     sw = StopWatch()
-    for i in range(int(sw.total / sw.interval+1)):
-        time.sleep(sw.interval)
-        data = client.fetch_data(sw.window_length)
-        # TODO: Do something with the data.
-        print(data.shape)
+    # for i in range(int(sw.total / sw.interval+1)):
+    def receiving():
+        while True:
+            time.sleep(sw.interval)
+            eeg_d, eeg_t = eeg.fetch_data(sw.window_length)
+            em_d, em_t = em.fetch_data(sw.window_length)
+            data = align_joint_eeg_em_data(eeg_d, eeg_t, em_d, em_t)
+            # TODO: Do something with the data.
+            print(data.shape)            
+            
+    from threading import Thread
+    Thread(target=receiving, daemon=True).start()
 
     # Wait for enter to be pressed.
     input('Press Enter to Escape.')
-    client.stop_receiving_thread()
+    eeg.stop_receiving_thread()
 
 # %% ---- 2025-05-08 ------------------------
 # Pending

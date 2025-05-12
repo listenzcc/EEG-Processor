@@ -23,20 +23,15 @@ import socket
 import numpy as np
 
 from threading import Thread
-from loguru import logger
-
-host = '192.168.31.79'
-port = 4000
-logger.add('log/debug.log', level='DEBUG', rotation='5 MB')
-logger.add('log/info.log', level='INFO', rotation='5 MB')
+from .logging import logger
 
 # %% ---- 2025-05-08 ------------------------
 # Function and class
 
 
 class BasicClient:
-    host: str = host
-    port: int = port
+    host: str = '192.168.31.79'
+    port: int = 4000
     channels: int = 67
     # The resolution of the received EEG data
     fResolution = 150e-6  # 0.00015 Volts
@@ -87,7 +82,10 @@ class BasicClient:
 
 class Client(BasicClient):
     socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+    data = []
+    times = []
+    n = 0
+    
     def __init__(self, **kwargs):
         super().__init__()
         for k, v in kwargs.items():
@@ -177,8 +175,10 @@ class Client(BasicClient):
         finally:
             # ----------------------------------------
             # ---- Close connection ----
+            time.sleep(0.1)
             self._send_command(self.commandDict['Closing_Up_Connection'])
             logger.info('Closed connection')
+            time.sleep(0.1)
             return
 
     def report_current_data_length(self):
@@ -187,11 +187,21 @@ class Client(BasicClient):
 
     @logger.catch
     def fetch_data(self, length: float = 1.0):
+        '''
+        Require data for length in seconds.
+        
+        :params length float: The length in seconds.
+        
+        :returns d: The required data.
+        :returns t: The times of the required data.
+        '''
         # How many packages are required
         n = int(length / self.seconds_per_package+1)
         if n > self.n:
             logger.warning(f'Not have enough data: {self.n} < {n}')
-        return np.concatenate(self.data[-n:], axis=0)
+        d = np.concatenate(self.data[-n:], axis=0)
+        t = self.times[-n:]
+        return d, t
 
     @logger.catch
     def receive_single(self):
